@@ -1,0 +1,208 @@
+<html>
+	<body>
+		<div id="my_camera"></div>
+		<canvas id="canvas"><canvas>
+	
+		<script src="https://webrtc.github.io/adapter/adapter-latest.js"></script>
+		<script src="jquery-3.1.1.min.js"></script>
+		<script src="tracking.js-master/build/tracking-min.js"></script>
+		<script src="inspirit-jsfeat-d88d318/build/jsfeat-min.js"></script>
+		<script>
+			var animate = window.requestAnimationFrame || window.webkitRequestAnimationFrame || window.mozRequestAnimationFrame ||
+				function(callback){
+				window.setTimeout(callback,1000/60);
+				};
+		
+			var tour, landmark, experience;
+			tour = "african_american_landmark_tour";
+			landmark = "engman_natatorium";
+			experience = landmark + "_a";
+			
+			var dir;
+			dir = "../" + tour + "/" + landmark + "/" + experience + "/";
+
+			var width = 320;
+			var height = 240;
+			
+			var workSc = .5;
+			
+			var $workCanvas = $('<canvas>', {
+				width: width * workSc,
+				height: height * workSc
+			}), workCanvas = $workCanvas.get(0);
+			
+			var workContext = workCanvas.getContext('2d');
+			
+			
+			var canvas = document.getElementById('canvas');
+			canvas.width = width;
+			canvas.height = height;
+			
+			var context = canvas.getContext('2d');		
+		
+			$('<img src="' + dir + 'img.jpg">').on('load', function() {
+				var image = this;
+								
+				var getFeatures = function(img) {
+					tracking.Fast.THRESHOLD = 30;
+
+					workContext.drawImage(img, 0, 0, width * workSc, height * workSc);
+					var imageData = workContext.getImageData(0, 0, width * workSc, height * workSc);
+					var gray = tracking.Image.grayscale(imageData.data, width * workSc, height * workSc);
+					var corners = tracking.Fast.findCorners(gray, width * workSc, height * workSc);
+					var descriptors = tracking.Brief.getDescriptors(gray, width * workSc, corners);
+										
+					var xy = new Array(corners.length/2);
+					for (var i = 0; i < corners.length; i += 2) {
+						xy[i/2] = {x: corners[i], y: corners[i+1]}
+					}
+										
+					return {corners: corners, descriptors: descriptors, xy: xy};  
+				};
+								
+				var targetFeatures = getFeatures(image);
+				var percentMatched = 0;
+
+				var $video, video;
+				$video = $('<video autoplay></video>');
+				video = $video.get(0);
+				
+				constraints = {'audio': false, 'video': true};
+				
+				var handleSuccess = function(stream) {
+					video.srcObject = stream;	
+				};
+				
+				var handleError = function(error) {
+				};
+				
+				//navigator.mediaDevices.getUserMedia(constraints).then(handleSuccess).catch(handleError);
+					
+				var homo3x3 = new jsfeat.matrix_t(3, 3, jsfeat.F32C1_t);
+				var match_mask = new jsfeat.matrix_t(500, 1, jsfeat.U8C1_t);
+					
+				var DEG2RAD = 3.14159/180, dir1 = 0, dir2 = 0, frame = 0, frameInterval = 1;
+				var step = function(){
+					context.clearRect(0, 0, canvas.width, canvas.height);
+					
+					context.save(); 
+
+					dir1 += .25;
+					dir2 += .4;
+					
+					var s = 3;
+					
+					var xx, yy;
+					xx = width/4 * Math.cos(dir1 * DEG2RAD);
+					yy = - height/4 * Math.sin(dir1 * DEG2RAD);
+					
+					context.translate(xx, yy); 
+					context.translate(width/2, height/2);
+					context.rotate(dir2*DEG2RAD);
+					context.scale(s,s);
+					context.translate(-width/2, -height/2);
+					context.drawImage(image, 0,0, width,height);
+					
+					context.restore();
+
+					if(frame++ % frameInterval == 0) {
+						//context.drawImage(video, 0,0, width, height);				
+						currentFeatures = getFeatures(canvas);
+												
+						var matches = tracking.Brief.reciprocalMatch(
+							targetFeatures.corners, targetFeatures.descriptors, 
+							currentFeatures.corners, currentFeatures.descriptors
+						);
+						
+						matches.sort(function(a, b) {
+							return b.confidence - a.confidence;
+						});
+						
+
+						percentMatched = 0;
+						var matchCount = matches.length;
+						
+						var targetXY = new Array(matchCount), currentXY = new Array(matchCount);
+
+						for(var i = 0; i < matchCount; i++) {
+							var match = matches[i];
+							percentMatched += match.confidence;
+							
+							var cXY = currentFeatures.xy[match.index2];
+							
+							targetXY[i] = targetFeatures.xy[match.index1];
+							currentXY[i] = cXY;
+							
+							context.fillStyle = '#f00';
+							context.fillRect(cXY.x/workSc, cXY.y/workSc, 3, 3);
+						}
+						percentMatched /= matchCount;
+						
+						var mm_kernel = new jsfeat.motion_model.homography2d();
+						var num_model_points = 4;
+						var reproj_threshold = 3																	
+						var ransac_param = new jsfeat.ransac_params_t(num_model_points, reproj_threshold, 0.5, 0.99);
+												
+						var ok = jsfeat.motion_estimator.ransac(ransac_param, mm_kernel,
+							targetXY, currentXY, matchCount, homo3x3, match_mask, 1000);
+												
+						var good_cnt = 0;
+						if(ok) {
+							var targetXY2 = [], currentXY2 = [];
+						
+							for(var i=0; i < matchCount; ++i) {
+								if(match_mask.data[i]) {
+									targetXY2.push(targetXY[i]);
+									currentXY2.push(currentXY[i]);
+									good_cnt++;
+								}
+							}
+							
+							// run kernel directly with inliers only
+							mm_kernel.run(targetXY2, currentXY2, homo3x3, good_cnt);
+						} else {
+							jsfeat.matmath.identity_3x3(homo3x3, 1.0);
+						}
+						
+						var pts = tVector(homo3x3.data, width, height);
+						context.strokeStyle = "white";
+						context.beginPath();
+						context.moveTo(pts[0]['x'], pts[0]['y']);
+						context.lineTo(pts[1]['x'], pts[1]['y']);
+						context.stroke();
+					}			
+			
+					animate(step);
+				};
+
+				animate(step);
+			});
+			
+			function tCorners(M, w, h) {
+                var pt = [ {'x':0,'y':0}, {'x':w,'y':0}, {'x':w,'y':h}, {'x':0,'y':h} ];
+                var z=0.0, i=0, px=0.0, py=0.0;
+                for (; i < 4; ++i) {
+                    px = M[0]*pt[i].x + M[1]*pt[i].y + M[2];
+                    py = M[3]*pt[i].x + M[4]*pt[i].y + M[5];
+                    z = M[6]*pt[i].x + M[7]*pt[i].y + M[8];
+                    pt[i].x = px/z;
+                    pt[i].y = py/z;
+                }
+                return pt;
+            }
+			
+			function tVector(M, w, h) {
+                var z=0.0, i=0, px=w/2, py=h/2;
+                var pt = [ {'x':px,'y':py}, {'x':px+w/2,'y':py}];
+                for (; i < pt.length; ++i) {
+                    px = M[0]*pt[i].x + M[1]*pt[i].y + M[2];
+                    py = M[3]*pt[i].x + M[4]*pt[i].y + M[5];
+                    z = M[6]*pt[i].x + M[7]*pt[i].y + M[8];
+                    pt[i].x = px/z;
+                    pt[i].y = py/z;
+                }
+                return pt;
+            }
+		</script>
+	</body>
+</html>

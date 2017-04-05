@@ -1,0 +1,133 @@
+<html>
+	<body>
+		<div id="my_camera"></div>
+		<canvas id="canvas"><canvas>
+	
+		<script src="https://webrtc.github.io/adapter/adapter-latest.js"></script>
+		<script src="jquery-3.1.1.min.js"></script>
+		<script src="tracking.js-master/build/tracking-min.js"></script>
+		<script>
+			var animate = window.requestAnimationFrame || window.webkitRequestAnimationFrame || window.mozRequestAnimationFrame ||
+				function(callback){
+				window.setTimeout(callback,1000/60);
+				};
+		
+			var tour, landmark, experience;
+			tour = "african_american_landmark_tour";
+			landmark = "engman_natatorium";
+			experience = landmark + "_a";
+			
+			var dir;
+			dir = "../" + tour + "/" + landmark + "/" + experience + "/";
+
+			var width = 320;
+			var height = 240;
+			
+			var workSc = .1;
+			
+			var $workCanvas = $('<canvas>', {
+				width: width * workSc,
+				height: height * workSc
+			}), workCanvas = $workCanvas.get(0);
+			
+			var workContext = workCanvas.getContext('2d');
+			
+			
+			var canvas = document.getElementById('canvas');
+			canvas.width = width;
+			canvas.height = height;
+			
+			var context = canvas.getContext('2d');		
+		
+			$('<img src="' + dir + 'img.jpg">').on('load', function() {
+				var image = this;
+								
+				var getFeatures = function(img) {
+					tracking.Fast.THRESHOLD = 50;
+
+					workContext.drawImage(img, 0, 0, width * workSc, height * workSc);
+					var imageData = workContext.getImageData(0, 0, width * workSc, height * workSc);
+					var gray = tracking.Image.grayscale(imageData.data, width * workSc, height * workSc);
+					var corners = tracking.Fast.findCorners(gray, width * workSc, height * workSc);
+					var descriptors = tracking.Brief.getDescriptors(gray, width * workSc, corners);
+					
+					return {corners: corners, descriptors: descriptors};  
+				};
+								
+				var targetFeatures = getFeatures(image);
+				var percentMatched = 0;
+
+				var $video, video;
+				$video = $('<video autoplay></video>');
+				video = $video.get(0);
+				
+				constraints = {'audio': false, 'video': true};
+				
+				var handleSuccess = function(stream) {
+					video.srcObject = stream;	
+				};
+				
+				var handleError = function(error) {
+				};
+				
+				navigator.mediaDevices.getUserMedia(constraints).
+					then(handleSuccess).catch(handleError);
+					
+				var DEG2RAD = 3.14159/180, dir1 = 0, dir2 = 0, frame = 0, frameInterval = 1;
+				var step = function(){
+					context.clearRect(0, 0, canvas.width, canvas.height);
+					
+					context.save(); 
+
+					dir1 += .25;
+					dir2 += .4;
+					
+					var s = 3;
+					
+					var xx, yy;
+					xx = width/4 * Math.cos(dir1 * DEG2RAD);
+					yy = - height/4 * Math.sin(dir1 * DEG2RAD);
+					
+					context.translate(xx, yy); 
+					context.translate(width/2, height/2);
+					context.rotate(dir2*DEG2RAD);
+					context.scale(s,s);
+					context.translate(-width/2, -height/2);
+					context.drawImage(image, 0,0, width,height);
+					
+					context.restore();
+
+					if(frame++ % frameInterval == 0) {
+						//context.drawImage(video, 0,0, width, height);				
+						currentFeatures = getFeatures(canvas);
+						
+						
+						var corners = currentFeatures.corners;
+						for (var i = 0; i < corners.length; i += 2) {
+							context.fillStyle = '#f00';
+							context.fillRect(corners[i]/workSc, corners[i + 1]/workSc, 3, 3);
+						}
+						
+						var matches = tracking.Brief.reciprocalMatch(
+							targetFeatures.corners, targetFeatures.descriptors, 
+							currentFeatures.corners, currentFeatures.descriptors
+						);
+
+						matches.sort(function(a, b) {
+							return b.confidence - a.confidence;
+						});
+						
+						percentMatched = 1. * matches.length / targetFeatures.descriptors.length;
+						
+						console.log(percentMatched);
+
+					}			
+			
+					animate(step);
+				};
+
+				animate(step);
+			});
+		</script>
+	</body>
+</html>
