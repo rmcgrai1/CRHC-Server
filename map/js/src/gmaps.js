@@ -3,7 +3,7 @@ function createMapMarker(args) {
     args = {};
   }
 
-  defaultTo(args, "text", "*");
+  defaultTo(args, "text", " ");
 
   defaultTo(args, "fillColor", CRHC.COLORS.BLUE_LIGHT);
   defaultTo(args, "fillOpacity", 1);
@@ -14,7 +14,7 @@ function createMapMarker(args) {
 
   defaultTo(args, "scale", 10);
 
-  return new google.maps.Marker({
+  var options = {
     position: args.position,
     map: window.map,
     label: {
@@ -32,5 +32,10 @@ function createMapMarker(args) {
       path: google.maps.SymbolPath.CIRCLE,
       scale: args.scale
     }
-  });
+  };
+
+  return {
+    options: options,
+    marker: new google.maps.Marker(options)
+  };
 }

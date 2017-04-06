@@ -13,13 +13,11 @@
 {"featureType": "road.highway","elementType": "labels.icon","stylers": [{"visibility": "off"}]},
 
 {"featureType": "road.arterial","elementType": "labels.icon","stylers": [{"visibility": "on"}]},
-{"featureType": "road.arterial","elementType": "geometry.stroke","stylers": [{"visibility":"on"},{"weight": "10.00"}]},
-{"featureType": "road.arterial","elementType": "geometry.fill","stylers": [{"visibility":"on"},{"weight": "10.00"}]},
+{"featureType": "road.arterial","elementType": "geometry.stroke","stylers": [{"visibility":"on"},{"weight": "4.00"}]},
 
 {"featureType": "road","elementType": "labels.icon","stylers": [{"visibility": "off"}]},
 {"featureType":"road.local","elementType":"all","stylers":[{"visibility":"on"}]},
-{"featureType": "road.local","elementType": "geometry.stroke","stylers": [{"visibility":"on"},{"weight": "10.00"}]},
-{"featureType": "road.local","elementType": "geometry.fill","stylers": [{"visibility":"on"},{"weight": "10.00"}]},
+{"featureType": "road.local","elementType": "geometry.stroke","stylers": [{"visibility":"on"},{"weight": "4.00"}]},
 
 {"featureType":"transit","elementType":"all","stylers":[{"visibility":"off"}]},
 {"featureType":"transit","elementType":"labels.icon","stylers":[{"visibility":"off"}]},
