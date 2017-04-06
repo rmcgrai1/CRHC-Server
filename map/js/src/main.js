@@ -62,11 +62,6 @@ function setDirections(fromLatLng, toLatLng) {
 	}, function(response, status) {
 		if (status == "OK") {
 			directionsRenderer.setDirections(response);
-
-			// Add marker:
-			/*var startMarker = createMapMarker({
-				position: fromLatLng, text: 'A'
-			});*/
 		}
 	});
 }
@@ -74,7 +69,7 @@ function setDirections(fromLatLng, toLatLng) {
 var
 	FRAME_TIME = 16,
 	PING_INTERVAL = 2000,
-	myMarker,
+	myMarkerGroup,
 	pingGroup,
 	pingTime;
 
@@ -87,7 +82,7 @@ function animatePing() {
 		f = (epoch() - pingTime)/PING_INTERVAL,
 		options = pingGroup.options;
 
-	options.icon.scale = 10 + 50*f;
+	options.icon.scale = myMarkerGroup.options.icon.scale * (1 + 5*f);
 	options.icon.strokeOpacity = 1-f;
 
 	pingGroup.marker.setOptions({
@@ -97,12 +92,31 @@ function animatePing() {
 
 function updatePingLocation() {
 	pingTime = epoch();
-	getLocation(function(myLatLng) {
+
+	getLocation(function(latLng) {
+		myLatLng = latLng;
+
+		var options = {
+			position: myLatLng
+		};
+		myMarkerGroup.marker.setOptions(options);
+		pingGroup.marker.setOptions(options);
+
 		if(myLatLng != prevLatLng) {
-			setDirections(myLatLng, destinationLatLng);
+			//setDirections(myLatLng, destinationLatLng);
 			prevLatLng = myLatLng;
 		}
 	});
+}
+
+function getLandmark(id) {
+	for(var landmark in landmarkList) {
+		landmark = landmarkList[landmark];
+
+		if(landmark.id == id) {
+			return landmark;
+		}
+	}
 }
 
 var prevLatLng;
@@ -119,21 +133,14 @@ function zoomFrac(currentZoom, startZoom) {
 var uiSettings;
 
 var
-	destinationLatLng;
+	destinationLatLng,
+	destinationGroup,
+	destinationLandmark;
 
 function initMap() {
 	geocoder = new google.maps.Geocoder();
 	infowindow = new google.maps.InfoWindow();
 
-	directionsRenderer = new google.maps.DirectionsRenderer({
-		map: window.map,
-		polylineOptions: new google.maps.Polyline({
-			strokeColor: CRHC.COLORS.RED,
-			strokeOpacity: 1.0,
-			strokeWeight: 10
-		}),
-		suppressMarkers: true
-	});
 	directionsService = new google.maps.DirectionsService();
 
 	$.getJSON("style.json", function(json) {
@@ -142,7 +149,9 @@ function initMap() {
 			lat = getUrlParameter('lat');
 			targetLandmark = getUrlParameter('targetLandmark');
 
-			getLocation(function(myLatLng) {
+			getLocation(function(latLng) {
+				myLatLng = latLng;
+
 				window.map = new google.maps.Map($divMap.get(0), {
 					zoom: startZoom,
 					center: myLatLng,
@@ -153,27 +162,37 @@ function initMap() {
 					styles: json
 				});
 
+				directionsRenderer = new google.maps.DirectionsRenderer({
+					map: window.map,
+					polylineOptions: new google.maps.Polyline({
+						strokeColor: CRHC.COLORS.RED,
+						strokeOpacity: 1.0,
+						strokeWeight: 8
+					}),
+					preserveViewport: true,
+					suppressMarkers: true
+				});
+
 				google.maps.event.addListener(window.map, 'click', function() {
 					infowindow.close();
 				});
 
 				loadLandmarks(function() {
 					if (targetLandmark !== null) {
-						for(var landmark in landmarkList) {
-							landmark = landmarkList[landmark];
+						targetLandmark = getLandmark(targetLandmark);
 
-							if(landmark.id == targetLandmark) {
-								destinationLatLng = landmark.latlng;
-								break;
-							}
-						}
+						destinationLatLng = targetLandmark.latLng;
+						destinationGroup = targetLandmark.group;
+						destinationLandmark = targetLandmark;
 					}
 					else if (lng !== null && lat !== null) {
 						destinationLatLng = new google.maps.LatLng(lat, lng);
-						createMapMarker({
+						destinationGroup = createMapMarker({
 							position: endPoint, text: 'B'
 						});
 					}
+
+					setDirections(myLatLng, destinationLatLng);
 				});
 
 				window.map.addListener('zoom_changed', function() {
@@ -201,10 +220,10 @@ function initMap() {
 					window.map.setOptions({styles: window.map.get('styles')});
 				});
 
-				myMarker = createMapMarker({
+				myMarkerGroup = createMapMarker({
 					position: myLatLng,
 					fillColor: CRHC.COLORS.RED
-				}).marker;
+				});
 
 				pingGroup = createMapMarker({
 					position: myLatLng,
@@ -224,6 +243,51 @@ function initMap() {
 	});
 }
 
+function changeUrlParameters(dict) {
+	//return location.protocol + '//' + location.host + location.pathname;
+
+	var path = location.pathname;
+
+	var i = 0;
+	for(var key in dict) {
+		if(i++ == 0) {
+			path += "?";
+		}
+		else {
+			path += "&";
+		}
+		path += key + "=" + dict[key];
+	}
+
+	history.pushState(null, null, path);
+}
+
+function changeDestination(id) {
+	changeUrlParameters({
+		targetLandmark: id
+	});
+
+	var landmark = getLandmark(id);
+
+	if(destinationLandmark == null) {
+		destinationGroup.marker.setMap(null);
+	}
+	else {
+		// TODO: Update old marker?
+	}
+
+	destinationLatLng = landmark.latLng;
+	destinationGroup = landmark.group;
+	/*var
+		newGroup = destinationGroup = landmark.group,
+		newOptions = newGroup.options;
+	newGroup.marker.setOptions(newOptions);*/
+
+	destinationLandmark = landmark;
+
+	setDirections(myLatLng, destinationLatLng);
+}
+
 function loadLandmarks(callback) {
 	var primaryHeader = 2, subHeader = primaryHeader + 1, subSubHeader = subHeader + 1;
 
@@ -236,12 +300,14 @@ function loadLandmarks(callback) {
 				continue;
 			}
 
-			var latlng = landmark.latlng = new google.maps.LatLng(landmark.latitude, landmark.longitude);
+			var latLng = landmark.latLng = new google.maps.LatLng(landmark.latitude, landmark.longitude);
 
 			// Add marker:
-			var marker = landmark.marker = createMapMarker({
-				position: latlng, text: landmark.number
-			}).marker;
+			landmark.group = createMapMarker({
+				position: latLng, text: landmark.number
+			});
+
+			var marker = landmark.group.marker;
 
 			google.maps.event.addListener(marker, 'click', (function(marker, landmark) {
 				return function() {
@@ -255,6 +321,8 @@ function loadLandmarks(callback) {
 					content += '<h'+primaryHeader+'>' + landmark.name + '</h'+primaryHeader+'>';
 					content += '<h'+subSubHeader+'>(' + landmark.address + ')</h'+subSubHeader+'>';
 					content += landmark.description+'<br>';
+
+					content += '<button onclick="changeDestination(\'' + landmark.id + '\');">Take me there!</button>';
 
 					var endWindow = function(content, map, marker) {
 						content += '<h'+subHeader+'>More Info</h'+subHeader+'>';
@@ -303,7 +371,7 @@ function loadLandmarks(callback) {
 									content += '<div style=\"display:table;\">';
 								}
 
-								content += "<div style=\"width:50%; height:50%; display:table-cell;\"><img src=\"" + dir + exp.id + "/img.jpg\" style=\"max-width:100%; max-height:100%;\"><i>" + exp.source + "</i></div>";
+								content += "<div style=\"width:50%; height:50%; display:table-cell;\"><img src=\"" + dir + exp.id + "/image.jpg\" style=\"max-width:100%; max-height:100%;\"><i>" + exp.source + "</i></div>";
 
 								if(!wasRowClosed) {
 									rowClosed = true;
