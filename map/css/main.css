@@ -11,3 +11,7 @@ div.infowindow {
 	max-height:250px;
 	overflow-y:auto;
 }
+
+span:hover {
+	cursor: pointer;
+}

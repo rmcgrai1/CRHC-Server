@@ -319,14 +319,16 @@ function loadLandmarks(callback) {
 					var content = "";
 					content += '<div class="infowindow">';
 					content += '<h'+primaryHeader+'>' + landmark.name + '</h'+primaryHeader+'>';
-					content += '<h'+subSubHeader+'>(' + landmark.address + ')</h'+subSubHeader+'>';
+					content += '<h'+subSubHeader+'>(' + landmark.address + ')';
+					content += ' <span onclick="changeDestination(\'' + landmark.id + '\');" style="color:'+CRHC.COLORS.RED+';">Get Directions<span class="glyphicon glyphicon-map-marker"></span></span>';
+					content += '</h'+subSubHeader+'>';
 					content += landmark.description+'<br>';
 
-					content += '<button onclick="changeDestination(\'' + landmark.id + '\');">Take me there!</button>';
-
 					var endWindow = function(content, map, marker) {
-						content += '<h'+subHeader+'>More Info</h'+subHeader+'>';
-						content += landmark.longDescription.replaceAll('\n', '<br>')+'<br>';
+						if (/\S/.test(landmark.longDescription)) {
+							content += '<h'+subHeader+'>More Info</h'+subHeader+'>';
+							content += landmark.longDescription.replaceAll('\n', '<br>')+'<br>';
+						}
 
 						// Add audio clips.
 						var audioClips = landmark.audioClips;
