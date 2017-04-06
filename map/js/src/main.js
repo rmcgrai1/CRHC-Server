@@ -178,21 +178,23 @@ function initMap() {
 				});
 
 				loadLandmarks(function() {
-					if (targetLandmark !== null) {
+					if (!!targetLandmark) {
 						targetLandmark = getLandmark(targetLandmark);
 
 						destinationLatLng = targetLandmark.latLng;
 						destinationGroup = targetLandmark.group;
 						destinationLandmark = targetLandmark;
 					}
-					else if (lng !== null && lat !== null) {
+					else if (!!lng && !!lat) {
 						destinationLatLng = new google.maps.LatLng(lat, lng);
 						destinationGroup = createMapMarker({
 							position: endPoint, text: 'B'
 						});
 					}
 
-					setDirections(myLatLng, destinationLatLng);
+					if(!!destinationLatLng) {
+						setDirections(myLatLng, destinationLatLng);
+					}
 				});
 
 				window.map.addListener('zoom_changed', function() {
@@ -250,7 +252,7 @@ function changeUrlParameters(dict) {
 
 	var i = 0;
 	for(var key in dict) {
-		if(i++ == 0) {
+		if(i++ === 0) {
 			path += "?";
 		}
 		else {
@@ -269,7 +271,7 @@ function changeDestination(id) {
 
 	var landmark = getLandmark(id);
 
-	if(destinationLandmark == null) {
+	if(destinationLandmark === null) {
 		destinationGroup.marker.setMap(null);
 	}
 	else {
